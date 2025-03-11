@@ -27,7 +27,7 @@
  #define DEVICE_NAME "cryptodev"
  #define CLASS_NAME  "crypto"
  /* 緩衝區大小可根據需求調整 */
- #define MAX_BUF_SIZE 8192
+ #define MAX_BUF_SIZE 25888
  
  /* 全域統計資料 */
  static int total_bytes_read = 0;
