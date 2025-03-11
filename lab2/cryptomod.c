@@ -27,7 +27,7 @@
  #define DEVICE_NAME "cryptodev"
  #define CLASS_NAME  "crypto"
  /* 緩衝區大小可根據需求調整 */
- #define MAX_BUF_SIZE 4096
+ #define MAX_BUF_SIZE 8192
  
  /* 全域統計資料 */
  static int total_bytes_read = 0;
@@ -455,7 +455,7 @@
  }
  
  MODULE_LICENSE("GPL");
- MODULE_AUTHOR("Your Name");
+ MODULE_AUTHOR("Wayne Chou");
  MODULE_DESCRIPTION("Cryptomod: Kernel Module for AES Encryption/Decryption");
  
  module_init(cryptodev_init);
