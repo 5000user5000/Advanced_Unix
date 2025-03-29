@@ -3,6 +3,7 @@
 
 from pwn import *
 import re
+import sys
 
 context.terminal = ['tmux', 'splitw', '-h']
 
@@ -526,65 +527,67 @@ def f22(ptr):
 # --------[ Entry ]-------- #
 if __name__ == "__main__":
     host = "up.zoolab.org"
-    #port = 2522
 
-    funcs = {
-        f'{2500 + i}': eval(f'f{i}') # port: func, ex: "2500": f1 
-        for i in range(23)
-    }
+    # Check if a port number is provided as a command-line argument (e.g., `python sol.py 5` for port 2505)
+    if len(sys.argv) == 2:
+        try:
+            port_num = int(sys.argv[1])  # Read the argument (e.g., 5)
+            if port_num < 0 or port_num > 22:
+                print("Error: Port number must be between 0 and 22.")
+                sys.exit(1)
+            target_port = str(2500 + port_num)  # Convert to port number (e.g., 2505)
+            print(f"Running test for port {target_port} only.")
+        except ValueError:
+            print("Error: Argument must be a number (0-22).")
+            sys.exit(1)
+    else:
+        target_port = None  # If no argument is provided, run all tests (0-22)
+        print("Running all tests (0-22).")
+
+    # Generate a dict of {port: function} for specified port(s)
+    funcs = {}
+    for i in range(23):
+        port = str(2500 + i)
+        if target_port is None or port == target_port:  # Include only the specified port (or all if none specified)
+            funcs[port] = eval(f'f{i}')  # e.g., "2505": f5
 
     flags = []
 
-
     for port, solver in funcs.items():
+        print(f"\n=== Running test for port {port} ===")
         io = remote(host, int(port))
-        # Get the full problem description until prompt
-        problem = io.recvuntil(b"Enter").decode() # problem description is before "Enter"
-        #print(problem)
+        problem = io.recvuntil(b"Enter").decode()
 
-        # Parse all 0x... addresses
-        ptr = re.findall(r'0x[0-9a-fA-F]+', problem) # get all hex addresses
-        # print(f"problem: {problem}")
+        # Extract all hex addresses from the problem description
+        ptr = re.findall(r'0x[0-9a-fA-F]+', problem)
         
-        # need to get recur number need to get
+        # Special handling for port 2518 (recursion count extraction)
         if port == "2518":
             recur_num = 0
             for line in problem.split("\n"):
                 if line.find("please call") != -1:
                     recur_num = re.findall(r'\d+', line)[0]
-                    # print(recur_num)
                     break
             ptr.append(recur_num)
 
-
-        #print(f"ptr: {ptr}")
-        #print(f"[+] Parsed {len(ptr)} pointers")
-
-        # Solve and send
-        #asm_code = f22(ptr)
+        # Generate and send the payload (assembly code)
         asm_code = solver(ptr)
-        
-        # print(f"[+] Sending payload:\n{asm_code}")
         payload = asm_code.encode() + b"done:"
-
-        # io.sendline(payload)
         io.sendlineafter(b'done)', payload)
 
-        # Print response
+        # Receive and parse the response
         response = io.recvall(timeout=10).decode()
-        #print(response)
-
-        # catch flag
         start_idx = response.find("FLAG: ")
         end_idx = response.find("}\n")
-        flag = response[ start_idx: end_idx + 1]
-        flags.append( port + ": " + flag)
-
-        
+        flag = response[start_idx: end_idx + 1]
+        flags.append(port + ": " + flag)
 
         io.close()
 
-for flag in flags:
+    # Print results
+    print("\n=== Test Results ===")
+    for flag in flags:
         if flag.find("FLAG") == -1:
-            exit( -1)
+            print(f"{flag} (FAILED)")
+            exit(-1)
         print(flag)
