@@ -526,44 +526,65 @@ def f22(ptr):
 # --------[ Entry ]-------- #
 if __name__ == "__main__":
     host = "up.zoolab.org"
-    port = 2522
+    #port = 2522
+
+    funcs = {
+        f'{2500 + i}': eval(f'f{i}') # port: func, ex: "2500": f1 
+        for i in range(23)
+    }
+
+    flags = []
 
 
-    io = remote(host, port)
+    for port, solver in funcs.items():
+        io = remote(host, int(port))
+        # Get the full problem description until prompt
+        problem = io.recvuntil(b"Enter").decode() # problem description is before "Enter"
+        #print(problem)
 
-    # Get the full problem description until prompt
-    problem = io.recvuntil(b"Enter").decode() # problem description is before "Enter"
-    print(problem)
-
-    # Parse all 0x... addresses
-    ptr = re.findall(r'0x[0-9a-fA-F]+', problem) # get all hex addresses
-    # print(f"problem: {problem}")
-    
-    # need to get recur number need to get
-    if port == 2518:
-        recur_num = 0
-        for line in problem.split("\n"):
-            if line.find("please call") != -1:
-                recur_num = re.findall(r'\d+', line)[0]
-                # print(recur_num)
-                break
-        ptr.append(recur_num)
+        # Parse all 0x... addresses
+        ptr = re.findall(r'0x[0-9a-fA-F]+', problem) # get all hex addresses
+        # print(f"problem: {problem}")
+        
+        # need to get recur number need to get
+        if port == "2518":
+            recur_num = 0
+            for line in problem.split("\n"):
+                if line.find("please call") != -1:
+                    recur_num = re.findall(r'\d+', line)[0]
+                    # print(recur_num)
+                    break
+            ptr.append(recur_num)
 
 
-    print(f"ptr: {ptr}")
-    print(f"[+] Parsed {len(ptr)} pointers")
+        #print(f"ptr: {ptr}")
+        #print(f"[+] Parsed {len(ptr)} pointers")
 
-    # Solve and send
-    asm_code = f22(ptr)
-    
-    # print(f"[+] Sending payload:\n{asm_code}")
-    payload = asm_code.encode() + b"done:"
+        # Solve and send
+        #asm_code = f22(ptr)
+        asm_code = solver(ptr)
+        
+        # print(f"[+] Sending payload:\n{asm_code}")
+        payload = asm_code.encode() + b"done:"
 
-    # io.sendline(payload)
-    io.sendlineafter(b'done)', payload)
+        # io.sendline(payload)
+        io.sendlineafter(b'done)', payload)
 
-    # Print response
-    response = io.recvall(timeout=10).decode()
-    print(response)
+        # Print response
+        response = io.recvall(timeout=10).decode()
+        #print(response)
 
-    io.close()
+        # catch flag
+        start_idx = response.find("FLAG: ")
+        end_idx = response.find("}\n")
+        flag = response[ start_idx: end_idx + 1]
+        flags.append( port + ": " + flag)
+
+        
+
+        io.close()
+
+for flag in flags:
+        if flag.find("FLAG") == -1:
+            exit( -1)
+        print(flag)
