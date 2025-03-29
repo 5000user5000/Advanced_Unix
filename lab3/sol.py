@@ -455,10 +455,79 @@ def f18(ptr):
     """
     return code
 
+def f19(ptr):
+    """
+    swapmem: swap the values in val1 and val2
+    """
+    code = f"""
+    mov     rsi, {ptr[2]}
+
+    ; load val1 into rax
+    mov     rax, qword ptr [rsi]        ; rax = val1
+
+    ; load val2 into rbx
+    mov     rbx, qword ptr [rsi + 8]    ; rbx = val2
+
+    ; store val2 into val1
+    mov     qword ptr [rsi], rbx
+
+    ; store val1 into val2
+    mov     qword ptr [rsi + 8], rax
+    """
+    return code
+
+def f20(ptr):
+    """
+    swapreg: swap the values in RAX and RBX
+    """
+    code = f"""
+    mov     rcx, rax
+    mov     rax, rbx
+    mov     rbx, rcx
+    """
+    return code
+
+def f21(ptr):
+    """"
+    tolower: convert the single character in val1 to uppercase and store in val2
+    """
+    code = f"""
+    mov     rsi, {ptr[2]}
+
+    ; load val1 char
+    mov     al, byte ptr [rsi]
+
+    ; check if it is lowercase a~z
+    cmp     al, 'a'
+    jb      .store       ; if < 'a'，save
+    cmp     al, 'z'
+    ja      .store       ; if  > 'z'，save
+
+    ; lowercase convert to uppercase（clear bit 5）
+    and     al, 0xDF      ; 'a' → 'A', 'b' → 'B', etc.
+
+    .store:
+        ; wrtie val2（DATAADDR + 1）
+        mov     byte ptr [rsi + 1], al
+    """
+    return code
+
+def f22(ptr):
+    """
+    ul+lu: convert the alphabet in CH from upper to lower or from lower to upper
+    """
+    code = f"""
+    _start:
+        xor ch, 0x20
+    """
+    return code
+
+
 # --------[ Entry ]-------- #
 if __name__ == "__main__":
     host = "up.zoolab.org"
-    port = 2518
+    port = 2522
+
 
     io = remote(host, port)
 
@@ -470,7 +539,7 @@ if __name__ == "__main__":
     ptr = re.findall(r'0x[0-9a-fA-F]+', problem) # get all hex addresses
     # print(f"problem: {problem}")
     
-    # 遞迴數要另外取
+    # need to get recur number need to get
     if port == 2518:
         recur_num = 0
         for line in problem.split("\n"):
@@ -485,7 +554,7 @@ if __name__ == "__main__":
     print(f"[+] Parsed {len(ptr)} pointers")
 
     # Solve and send
-    asm_code = f18(ptr)
+    asm_code = f22(ptr)
     
     # print(f"[+] Sending payload:\n{asm_code}")
     payload = asm_code.encode() + b"done:"
