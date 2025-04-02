@@ -1,0 +1,62 @@
+(pwntools) (base) wayne@wayne-MS-7D91:~/project/apunix/lab3$ python3 submit.py libsolver.so
+## Payload loaded (18052 bytes), sha1 = f67c65e89f9366d0d297087f919ca228a299280d
+[+] Opening connection to up.zoolab.org on port 58164: Done
+1743598919.244931 solving pow ...
+solved = b'2720443'
+1743598920.2129312 done.
+[*] Switching to interactive mode
+## Payload received (18052 bytes), sha1 = f67c65e89f9366d0d297087f919ca228a299280d
+ERROR: ld.so: object '/libsolver.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
+ERROR: ld.so: object '/libsolver.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
+GOTOKU: library loaded (1000, 1000).
+UP113_GOT_PUZZLE_CHALLENGE
+GOTOKU: library init - stored pointer = 0x558cc8301c89.
+SOLVER: _main = 0x558cc8301c89
+GOTOKU: game loaded
+Solved board:
+9 8 5 4 7 3 1 2 6
+3 6 7 9 2 1 4 8 5
+4 1 2 6 8 5 3 9 7
+2 7 9 5 6 4 8 1 3
+6 3 4 2 1 8 7 5 9
+8 5 1 7 3 9 2 6 4
+7 4 8 1 5 6 9 3 2
+1 2 6 3 9 7 5 4 8
+5 9 3 8 4 2 6 7 1
+GOT table modified.
+patch count = 128
+0 0
+0 8 0 0 7 3 1 2 0
+0 0 0 0 2 0 0 0 5
+4 0 2 0 8 5 3 9 7
+2 0 9 5 0 0 8 1 0
+0 0 4 0 1 8 7 5 0
+0 5 1 7 3 9 2 0 4
+7 0 0 1 0 0 0 0 2
+0 0 6 0 0 0 0 4 0
+5 9 3 0 4 0 6 0 0
+1 6
+9 8 5 4 7 3 1 2 6
+3 6 7 9 2 1 4 8 5
+4 1 2 6 8 5 3 9 7
+2 7 9 5 6 4 8 1 3
+6 3 4 2 1 8 7 5 9
+8 5 1 7 3 9 2 6 4
+7 4 8 1 5 6 9 3 2
+1 2 6 3 9 7 5 4 8
+5 9 3 8 4 2 6 7 1
+
+Bingo! The flag is `FLAG{g0t_sud0ku_so1ved_2o25!}|Wed Apr  2 13:02:00 2025|`.
+Validation script:
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+rm -f /tmp/_pub.pem /tmp/_msg.bin /tmp/_sig.bin
+cat > /tmp/_pub.pem<<EOF
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAILamhh4aXszHBI25FFaRDEi2SBohmL2wkXKSHMlX38g=
+-----END PUBLIC KEY-----
+EOF
+echo -n 'FLAG{g0t_sud0ku_so1ved_2o25!}|Wed Apr  2 13:02:00 2025|' > /tmp/_msg.bin
+echo 'EpqtaoHwpLul2ugqzNmMr1OfEB5yERI9WRWVlSbrQlwlUZEDC4Yi0I0cCq3Q1bHe3HmPWl0GkpyxhpowXAxqBQ==' | base64 -d > /tmp/_sig.bin
+openssl pkeyutl -verify -pubin -inkey /tmp/_pub.pem -rawin -in /tmp/_msg.bin -sigfile /tmp/_sig.bin
+## Done.
+[*] Got EOF while reading in interactive

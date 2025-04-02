@@ -24,10 +24,10 @@ $(LIBTARGET): $(LIB)
 	$(CC) $(LIBFLAGS) -g -o $@ $^
 
 $(PRELOAD_LIBTARGET): $(PRELOAD_LIB) $(LIBTARGET)
-	$(CC) $(LIBFLAGS) -g -ldl -lc -o $@ $^ $(LIBTARGET)
+	$(CC) $(LIBFLAGS) -g -ldl -lc -o $@ $^
 
 run: all
-	LD_PRELOAD=./libsolver.so:./libgotoku.so ./gotoku.local
+	LD_LIBRARY_PATH=. LD_PRELOAD=./libsolver.so ./gotoku.local
 
 clean:
 	rm -f $(TARGET) $(LIBTARGET) $(PRELOAD_LIBTARGET)
