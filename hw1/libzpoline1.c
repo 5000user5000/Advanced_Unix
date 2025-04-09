@@ -41,7 +41,7 @@ __attribute__((constructor)) void init() {
     i += 4; // placeholder for relative offset
 
     // mov rdx, len         ; message length
-    const char *msg = "Hello from trampoline!\n";
+    const char *msg = "Hello from trampoline!\n\n";
     size_t msg_len = strlen(msg);
     code[i++] = 0x48; code[i++] = 0xc7; code[i++] = 0xc2;
     code[i++] = (unsigned char)(msg_len & 0xff);
@@ -63,13 +63,13 @@ __attribute__((constructor)) void init() {
     int32_t rel = (int32_t)(msg_addr - (code + rel_offset_pos + 4));
     memcpy(code + rel_offset_pos, &rel, sizeof(int32_t));
 
-    // Step 6: test trampoline
-    int offsets[] = {0, 177, 285, 326, 511};
-    for (int j = 0; j < sizeof(offsets)/sizeof(int); j++) {
-        int offset = offsets[j];
-        printf("Trying to call function at address: %d\n", offset);
-        void (*fptr)() = (void (*)())((char *)addr + offset);
-        fptr(); // should print message
-        //printf("\n");
-    }
+    // Step 6: test trampoline (optional)
+    // int offsets[] = {0, 177, 285, 326, 511};
+    // for (int j = 0; j < sizeof(offsets)/sizeof(int); j++) {
+    //     int offset = offsets[j];
+    //     printf("Trying to call function at address: %d\n", offset);
+    //     void (*fptr)() = (void (*)())((char *)addr + offset);
+    //     fptr(); // should print message
+    //     //printf("\n");
+    // }
 }
