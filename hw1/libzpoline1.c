@@ -9,6 +9,11 @@
 #define TRAMPOLINE_SIZE 4096
 #define TRAMPOLINE_ADDR ((void *)0x0)
 
+
+#ifdef INTEGRATED_VERSION
+// 當整合版本中，不執行 libzpoline1 的初始化（避免與 libzpoline2 衝突）
+__attribute__((constructor(101))) void init_libz1_stub() { }
+#else
 __attribute__((constructor)) void init() {
     // Step 1: mmap address 0x0
     void *addr = mmap(TRAMPOLINE_ADDR, TRAMPOLINE_SIZE,
@@ -73,3 +78,4 @@ __attribute__((constructor)) void init() {
     //     //printf("\n");
     // }
 }
+#endif
