@@ -2,8 +2,7 @@ CC = gcc
 CFLAGS = -Wall -O2 -fPIC
 SHARED_FLAGS = -shared
 
-all: libzpoline.so.1 libzpoline.so.2 libzpoline.so libex3hook.so
-#all: libzpoline.so.1 libzpoline.so.2 libzpoline.so libex3hook.so logger.so
+all: libzpoline.so.1 libzpoline.so.2 libzpoline.so libex3hook.so logger.so
 
 # 原始的 libzpoline.so.1 版本，供 ex1 測試
 libzpoline.so.1: libzpoline1.c
