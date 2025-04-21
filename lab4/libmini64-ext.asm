@@ -119,55 +119,65 @@ sigprocmask:
     syscall
     ret
 
-; setjmp
 setjmp:
     mov     rdx, rdi               ; env pointer
-    mov     qword [rdx    ], rbx     ; reg[0] = rbx
-    mov     qword [rdx+  8], rsp   ; reg[1] = RSP
-    mov     qword [rdx+ 16], rbp   ; reg[2] = RBP
-    mov     qword [rdx+ 24], r12   ; reg[3] = R12
-    mov     qword [rdx+ 32], r13   ; reg[4] = R13
-    mov     qword [rdx+ 40], r14   ; reg[5] = R14
-    mov     qword [rdx+ 48], r15   ; reg[6] = R15
-    ; mov     rcx, [rsp]
-    ; mov     [rdx+56], rcx
-    call    .Lsj_ret
-.Lsj_ret:
-    ; pop     rcx
-    mov     qword [rdx+ 56], rcx   ; reg[7] = RIP
-    ; save signal mask
-    mov     rax, 14                 ; rt_sigprocmask
-    mov     rdi, 0                  ; SIG_SETMASK
-    xor     rsi, rsi                ; newset = NULL
-    lea     rdx, [rdx+64]           ; oldset = &env->mask
-    mov     r10, 8                  ; sigset size
+
+    ; 存 callee‑saved registers
+    mov     [rdx+0 ], rbx
+    mov     [rdx+8 ], rbp
+    lea     rax,  [rsp]            ; current rsp
+    mov     [rdx+16], rax
+    mov     [rdx+24], r12
+    mov     [rdx+32], r13
+    mov     [rdx+40], r14
+    mov     [rdx+48], r15
+
+    ; 存 caller RIP (= stack top)
+    mov     rax,  [rsp]
+    mov     [rdx+56], rax
+
+    ; 存目前 signal mask → env+64
+    mov     eax, 14                ; SYS_rt_sigprocmask
+    xor     edi, edi               ; how = SIG_SETMASK (查詢)
+    xor     esi, esi               ; newset = NULL
+    lea     rdx,  [rdx+64]         ; oldset
+    mov     r10, 8                 ; sigsetsize
     syscall
-    xor     eax, eax                ; return 0
+
+    xor     eax, eax               ; 第一次回傳 0
     ret
 
-; longjmp
+; ------------------------------------------
+;   void longjmp(jmp_buf env, int val)
+; ------------------------------------------
 longjmp:
-    mov     r8, rdi                 ; env pointer
-    mov     rax, rsi                ; val
-    test    rax, rax
-    jnz     .Llj_val
-    mov     rax, 1
-.Llj_val:
-    mov     qword [r8    ], rax     ; env->reg[0]
-    ; restore signal mask
-    mov     rax, 14
-    mov     rdi, 2                  ; SIG_SETMASK
-    lea     rsi, [r8+64]            ; newset = &env->mask
-    xor     rdx, rdx                ; oldset = NULL
-    mov     r10, 8                  ; sigset size
+    mov     r8,  rdi               ; env*
+    mov     eax, esi               ; val → eax (32 位即可)
+    test    eax, eax
+    jne     .val_ok
+    mov     eax, 1
+.val_ok:
+    mov     r9d, eax               ; 保留待會要回傳的值
+
+    ; 恢復 signal mask
+    mov     eax, 14                ; SYS_rt_sigprocmask
+    mov     edi, 2                 ; how = SIG_SETMASK
+    lea     rsi, [r8+64]           ; newset = &env->mask
+    xor     edx, edx               ; oldset = NULL
+    mov     r10, 8                 ; sigsetsize
     syscall
-    ; restore stack pointer and callee-saved registers
-    mov     rsp, [r8+  8]
-    mov     rbp, [r8+ 16]
-    mov     r12, [r8+ 24]
-    mov     r13, [r8+ 32]
-    mov     r14, [r8+ 40]
-    mov     r15, [r8+ 48]
-    mov     rcx, [r8+ 56]           ; RIP
-    jmp     rcx                     ; jump back
+
+    ; 恢復 callee‑saved registers
+    mov     rbx, [r8+0 ]
+    mov     rbp, [r8+8 ]
+    mov     r12, [r8+24]
+    mov     r13, [r8+32]
+    mov     r14, [r8+40]
+    mov     r15, [r8+48]
+    mov     rsp, [r8+16]           ; **最後** 再改 rsp
+
+    ; 設定回傳值並跳回
+    mov     rax, r9
+    mov     rcx, [r8+56]           ; saved rip
+    jmp     rcx                    ; 不會回來
 
