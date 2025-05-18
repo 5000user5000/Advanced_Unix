@@ -664,8 +664,8 @@ void handle_info_cmd(const std::vector<std::string>& args) {
             return;
         }
 
-        printf("$rip  0x%016llx\n", regs_cache.rip);
-        printf("$rax  0x%016llx\n", regs_cache.rax);
+        // printf("$rip  0x%016llx\n", regs_cache.rip);
+        // printf("$rax  0x%016llx\n", regs_cache.rax);
 
         const char* names[] = {
             "$rax","$rbx","$rcx","$rdx","$rsi","$rdi","$rbp","$rsp",
