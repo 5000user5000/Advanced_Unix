@@ -263,7 +263,7 @@ void disassemble_and_print(uint64_t rip, size_t count) {
                 sprintf(hb, " %02x", insn[i].bytes[j]);
                 bstr += hb;
             }
-            lss << std::left << std::setw(24) << bstr << insn[i].mnemonic;
+            lss << std::left << std::setw(32) << bstr << "      " << insn[i].mnemonic;
             if (insn[i].op_str[0] != '\0') {
                 lss << " " << insn[i].op_str;
             }
@@ -318,28 +318,22 @@ void ptrace_syscall_step(pid_t pid) {
 
 bool wait_for_process_event(int& status_code_out) {
     if (child_pid == 0) return false;
-
     if (waitpid(child_pid, &status_code_out, 0) == -1) {
-        program_loaded = false;
-        child_pid = 0;
+        program_loaded = false; child_pid = 0;
         return false;
     }
-
     regs_cache_valid = false;
 
     if (WIFEXITED(status_code_out)) {
         std::cout << "** the target program terminated." << std::endl;
-        program_loaded = false;
-        child_pid = 0;
+        program_loaded = false; child_pid = 0;
         return false;
     }
-
     if (WIFSIGNALED(status_code_out)) {
         std::cout << "** the target program terminated "
                   << "(killed by signal " << WTERMSIG(status_code_out)
                   << ")." << std::endl;
-        program_loaded = false;
-        child_pid = 0;
+        program_loaded = false; child_pid = 0;
         return false;
     }
 
@@ -347,53 +341,45 @@ bool wait_for_process_event(int& status_code_out) {
         last_signal_received = WSTOPSIG(status_code_out);
         get_current_registers();
 
-        // Syscall entry/exit 處理
-        if (in_syscall_execution_mode &&
-            (last_signal_received == (SIGTRAP | 0x80))) {
-            uint64_t syscall_instruction_addr = regs_cache.rip - 2;
+        // --- 處理 Syscall 進出點 ---
+        if (in_syscall_execution_mode && (last_signal_received == (SIGTRAP | 0x80))) {
+            uint64_t addr = regs_cache.rip - 2;
             if (is_next_syscall_stop_entry) {
                 std::cout << "** enter a syscall(" << regs_cache.orig_rax
-                          << ") at 0x" << std::hex << syscall_instruction_addr
-                          << "." << std::endl;
+                          << ") at 0x" << std::hex << addr << "." << std::endl;
                 is_next_syscall_stop_entry = false;
             } else {
                 std::cout << "** leave a syscall(" << regs_cache.orig_rax
                           << ") = " << std::dec << (long long)regs_cache.rax
-                          << " at 0x" << std::hex
-                          << syscall_instruction_addr << "." << std::endl;
+                          << " at 0x" << std::hex << addr << "." << std::endl;
                 is_next_syscall_stop_entry = true;
-                in_syscall_execution_mode   = false;
+                in_syscall_execution_mode = false;
             }
-            regs_cache.rip = syscall_instruction_addr;  // For disassembly
+            regs_cache.rip = addr;
             return true;
         }
-        // Breakpoint 處理
+        // --- 處理斷點 ---
         else if (last_signal_received == SIGTRAP) {
-            uint64_t addr_before_rip = regs_cache.rip - 1;
-            auto     bp_iter_prev   = breakpoints_by_addr.find(addr_before_rip);
-            auto     bp_iter_curr   = breakpoints_by_addr.find(regs_cache.rip);
+            uint64_t prev = regs_cache.rip - 1;
+            auto it_prev = breakpoints_by_addr.find(prev);
+            auto it_now  = breakpoints_by_addr.find(regs_cache.rip);
+            bool     hit = false;
+            uint64_t bp_addr = 0;
 
-            uint64_t actual_bp_addr = 0;
-            bool     bp_found       = false;
-
-            if (bp_iter_prev != breakpoints_by_addr.end() &&
-                bp_iter_prev->second.is_enabled) {
-                actual_bp_addr = addr_before_rip;
-                bp_found       = true;
-            } else if (bp_iter_curr != breakpoints_by_addr.end() &&
-                       bp_iter_curr->second.is_enabled) {
-                actual_bp_addr = regs_cache.rip;
-                bp_found       = true;
+            if (it_prev != breakpoints_by_addr.end() && it_prev->second.is_enabled) {
+                bp_addr = prev; hit = true;
+            } else if (it_now != breakpoints_by_addr.end() && it_now->second.is_enabled) {
+                bp_addr = regs_cache.rip; hit = true;
             }
 
-            if (bp_found) {
+            if (hit) {
                 if (in_syscall_execution_mode) {
                     in_syscall_execution_mode  = false;
                     is_next_syscall_stop_entry = true;
                 }
                 std::cout << "** hit a breakpoint at 0x"
-                          << std::hex << actual_bp_addr << "." << std::endl;
-                regs_cache.rip = actual_bp_addr;
+                          << std::hex << bp_addr << "." << std::endl;
+                regs_cache.rip = bp_addr;
                 set_current_registers();
             } else {
                 if (in_syscall_execution_mode) {
@@ -402,7 +388,9 @@ bool wait_for_process_event(int& status_code_out) {
                 }
             }
             return true;
-        } else {
+        }
+        // 其他 signal 停止
+        else {
             if (in_syscall_execution_mode) {
                 in_syscall_execution_mode  = false;
                 is_next_syscall_stop_entry = true;
@@ -410,7 +398,6 @@ bool wait_for_process_event(int& status_code_out) {
             return true;
         }
     }
-
     return false;
 }
 
@@ -617,6 +604,7 @@ void execute_and_report(
         return;
     }
 
+    // --- 管理 Syscall 模式 ---
     if (cmd_type == "syscall") {
         if (!in_syscall_execution_mode) {
             is_next_syscall_stop_entry = true;
@@ -624,28 +612,36 @@ void execute_and_report(
         in_syscall_execution_mode = true;
     } else {
         if (in_syscall_execution_mode) {
-            in_syscall_execution_mode  = false;
             is_next_syscall_stop_entry = true;
         }
+        in_syscall_execution_mode = false;
     }
 
+    // --- 如果 RIP 在斷點上，先跨過斷點指令 ---
     if (regs_cache_valid) {
-        auto bp_it = breakpoints_by_addr.find(regs_cache.rip);
-        if (bp_it != breakpoints_by_addr.end() && bp_it->second.is_enabled) {
-            if (step_over_instruction_at_breakpoint()) {
-                if (cmd_type == "si" && program_loaded) {
+        auto it = breakpoints_by_addr.find(regs_cache.rip);
+        if (it != breakpoints_by_addr.end() && it->second.is_enabled) {
+            if (!step_over_instruction_at_breakpoint()) {
+                return;  // 如果程式結束，就退出
+            }
+            // 如果是 si ，就顯示新位置後立即回
+            if (cmd_type == "si") {
+                if (program_loaded) {
                     disassemble_and_print(regs_cache.rip, 5);
                 }
                 return;
             }
-            return;
+            // 對於 cont 或 syscall，繼續往下一步 ptrace_action
         }
     }
 
+    // --- 執行真正的 ptrace 動作：PTRACE_CONT / PTRACE_SYSCALL / PTRACE_SINGLESTEP ---
     ptrace_action(child_pid);
     int status;
-    if (wait_for_process_event(status) && program_loaded) {
-        disassemble_and_print(regs_cache.rip, 5);
+    if (wait_for_process_event(status)) {
+        if (program_loaded) {
+            disassemble_and_print(regs_cache.rip, 5);
+        }
     }
 }
 
