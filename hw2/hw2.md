@@ -122,6 +122,8 @@ Sample output (assume only addresses from `0x401000` to `0x402000` are executabl
 
 :::info
 **Hint:** You can link against the `capstone` library for disassembling.
+
+Note that the disassembly output of capstone v5 and v4 might be different, just make sure they have the same meaning. (e.g. `mov rcx, 0xffffffffffffffb8` vs `mov rcx, -0x48`).
 :::
 
 ### Step Instruction
@@ -132,18 +134,28 @@ Sample output (assume only addresses from `0x401000` to `0x402000` are executabl
     - If the program hits a breakpoint, output `** hit a breakpoint at [addr].`
     - If the program terminates, output `** the target program terminated.`
 
-- Sample output:
+- Sample output (assume only addresses from `0x401000` to `0x402000` are executable):
 ```
-(sdb) break 40103b
-** set a breakpoint at 0x40103b.
+(sdb) break 401629
+** set a breakpoint at 0x401629.
 (sdb) si
-** hit a breakpoint at 0x40103b.
-      40103b: b8 3c 00 00 00                    mov       eax, 0x3c
-      401040: 0f 05                             syscall
-** the address is out of the range of the text section.
+** hit a breakpoint at 0x401629.
+      401629: 5e                               pop       rsi
+      40162a: 48 89 e2                         mov       rdx, rsp
+      40162d: 48 83 e4 f0                      and       rsp, 0xfffffffffffffff0
+      401631: 50                               push      rax
+      401632: 54                               push      rsp
 (sdb) si
-      401040: 0f 05                             syscall
-** the address is out of the range of the text section.
+      40162a: 48 89 e2                         mov       rdx, rsp
+      40162d: 48 83 e4 f0                      and       rsp, 0xfffffffffffffff0
+      401631: 50                               push      rax
+      401632: 54                               push      rsp
+      401633: 45 31 c0                         xor       r8d, r8d
+(sdb) ...
+...
+(sdb) si
+      401ffe: 0f 05                             syscall
+** the address is out of the range of the executable region.
 (sdb) si
 ** the target program terminated.
 ```
@@ -324,7 +336,7 @@ Num     Address
 - Command: `patch [hex address] [hex string]`
 
 - Patch memory starts at the `address` with the `[hex string]`. The maximum of the `strlen([hex string])` is `2048`, and you don't need to handle the case that `strlen([hex string]) % 2 != 0` (which means that we will not given input like `a`, `aab` or `aabbc`)
-    - If the patch address and the size of the hex string is valid, output `** patch memory at address [hex address].`
+    - If the patch address and the size of the hex string is valid, output `** patch memory at [hex address].`
     - If `[hex address]` is not a valid address or `[hex address] + sizeof([hex string])` is not a valid address, output `** the target address is not valid.`.
 
 :::info
@@ -367,7 +379,7 @@ Num     Address
 - Sample output:
 ```
 (sdb) syscall
-** hit a breakpoint at 0x401008
+** hit a breakpoint at 0x401008.
       401008: ba 0e 00 00 00                  	mov       edx, 0xe
       40100d: 48 8d 05 ec 0f 00 00            	lea       rax, [rip + 0xfec]
       401014: 48 89 c6                        	mov       rsi, rax
@@ -431,7 +443,7 @@ cont
       401631: 50                               push      rax
 (sdb) cont
 hello world!
-** the target process terminated.
+** the target program terminated.
 ```
 
 ### Example 1-2 (5%)
@@ -466,7 +478,7 @@ cont
       5a50f11f3091: 50                               push      rax
 (sdb) cont
 hola mundo!
-** the target process terminated.
+** the target program terminated.
 ```
 
 :::info
@@ -535,10 +547,10 @@ $r12 0x0000000000000001    $r13 0x00007ffce3541af8    $r14 0x00000000004c17d0
 $r15 0x0000000000000001    $rip 0x00000000004017e6    $eflags 0x0000000000000246
 (sdb) cont
 hello world!
-** the target process terminated.
+** the target program terminated.
 ```
 :::info
-**Note:** The output of `$rax`, `$rbx`, `$r13`, `$rbp` and `$rsp` can be different. Just make sure that `$rbp - $rsp` equals to `0x20`.
+**Note:** Make sure that `$rbp - $rsp` equals to `0x20`.
 :::
 
 
@@ -585,11 +597,12 @@ matcha parfait
       4017a0: 48 8d 05 5d 68 09 00             lea       rax, [rip + 0x9685d]
       4017a7: 48 89 c7                         mov       rdi, rax
 (sdb) patch 40179e 7f
-** patched memory at 0x40179e.
+** patch memory at 0x40179e.
 (sdb) info break
 Num     Address
 0       0x401798
 (sdb) delete 0
+** delete breakpoint 0.
 (sdb) patch deadbeef 1337
 ** the target address is not valid.
 (sdb) break deadbeef
@@ -599,7 +612,7 @@ Num     Address
 (sdb) cont
 live!
 live!
-** the target process terminated.
+** the target program terminated.
 ```
 
 ### Example 4 (10%)
@@ -665,9 +678,84 @@ hello world!
       447e55: c3                               ret
       447e56: 48 c7 c1 b8 ff ff ff             mov       rcx, 0xffffffffffffffb8
 (sdb) syscall
-** the target process terminated.
+** the target program terminated.
 ```
 
+:::info
+The disassembly output of capstone v5 and v4 might be different, just make sure they have the same meaning. (e.g. `mov rcx, 0xffffffffffffffb8` vs `mov rcx, -0x48`).
+:::
+
+### Extra Example (0%)
+- Launch debugger: `./sdb ./anon`
+- Input:
+```
+break 401828
+cont
+si
+break 0x700000000ffa
+cont
+si
+si
+si
+cont
+```
+- Sample:
+```
+** program './anon' loaded. entry point: 0x401650.
+      401650: f3 0f 1e fa                      endbr64
+      401654: 31 ed                            xor       ebp, ebp
+      401656: 49 89 d1                         mov       r9, rdx
+      401659: 5e                               pop       rsi
+      40165a: 48 89 e2                         mov       rdx, rsp
+(sdb) break 401828
+** set a breakpoint at 0x401828.
+(sdb) cont
+** hit a breakpoint at 0x401828.
+      401828: ff d2                            call      rdx
+      40182a: 48 8d 05 cf 38 0c 00             lea       rax, [rip + 0xc38cf]
+      401831: 48 89 c7                         mov       rdi, rax
+      401834: e8 37 ae 00 00                   call      0x40c670
+      401839: b8 00 00 00 00                   mov       eax, 0
+(sdb) si
+      700000000000: 90                               nop
+      700000000001: 90                               nop
+      700000000002: 90                               nop
+      700000000003: 90                               nop
+      700000000004: 90                               nop
+(sdb) break 0x700000000ffa
+** set a breakpoint at 0x700000000ffa.
+(sdb) cont
+** hit a breakpoint at 0x700000000ffa.
+      700000000ffa: 90                               nop
+      700000000ffb: 90                               nop
+      700000000ffc: 90                               nop
+      700000000ffd: 90                               nop
+      700000000ffe: 90                               nop
+(sdb) si
+      700000000ffb: 90                               nop
+      700000000ffc: 90                               nop
+      700000000ffd: 90                               nop
+      700000000ffe: 90                               nop
+      700000000fff: c3                               ret
+(sdb) si
+      700000000ffc: 90                               nop
+      700000000ffd: 90                               nop
+      700000000ffe: 90                               nop
+      700000000fff: c3                               ret
+** the address is out of the range of the executable region.
+(sdb) si
+      700000000ffd: 90                               nop
+      700000000ffe: 90                               nop
+      700000000fff: c3                               ret
+** the address is out of the range of the executable region.
+(sdb) cont
+Welcome to ANON TOKYO!
+
+** the target program terminated.
+```
+:::info
+The example is just for you to test disassembling instructions when current program counter is near the boundary of executable region.
+:::
 
 ## Hints
 
