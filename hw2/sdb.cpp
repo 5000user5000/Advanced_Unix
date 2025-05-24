@@ -304,6 +304,34 @@ void disassemble_and_print(uint64_t rip, size_t count) {
     }
 }
 
+void refresh_executable_segments() {
+    if (!program_loaded || child_pid == 0) return;
+
+    executable_segments_global.clear();
+
+    std::ifstream maps_file("/proc/" + std::to_string(child_pid) + "/maps");
+    std::string line;
+
+    while (std::getline(maps_file, line)) {
+        std::istringstream iss(line);
+        uint64_t start, end, file_offset;
+        std::string perms, dev_str, inode_str, current_path_in_map;
+
+        iss >> std::hex >> start;
+        iss.ignore(1);
+        iss >> std::hex >> end;
+        iss >> perms >> std::hex >> file_offset >> dev_str >> inode_str;
+        iss >> std::ws;
+        std::getline(iss, current_path_in_map);
+
+        if (perms.length() >= 3 && perms[2] == 'x') {
+            executable_segments_global.push_back({ start, end, perms, current_path_in_map });
+        }
+    }
+    maps_file.close();
+}
+
+
 void ptrace_continue_execution(pid_t pid) {
     ptrace(PTRACE_CONT, pid, nullptr, nullptr);
 }
@@ -442,8 +470,10 @@ bool step_over_instruction_at_breakpoint() {
         }
 
         get_current_registers();
+        refresh_executable_segments(); 
         if (WIFEXITED(status) || WIFSIGNALED(status)) {
             wait_for_process_event(status);
+            refresh_executable_segments();
             return false;
         }
 
@@ -710,6 +740,7 @@ void handle_info_cmd(const std::vector<std::string>& args) {
 }
 
 void add_new_breakpoint(uint64_t eff_addr) {
+    refresh_executable_segments();
     if (!is_address_in_executable_region(eff_addr)) {
         std::cout << "** the target address is not valid." << std::endl;
         return;
@@ -842,6 +873,7 @@ void handle_patch_cmd(const std::vector<std::string>& args) {
         }
     }
 
+    refresh_executable_segments();
     for (size_t i = 0; i < bvec.size(); ++i) {
         if (!is_address_in_executable_region(adr_p + i)) {
             std::cout << "** the target address is not valid." << std::endl;
