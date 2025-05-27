@@ -178,13 +178,13 @@ Here, we provide a sample script for you to run the challenge binaries locally o
 
 # Lab Grading
 
-1. [10 pts] You can solve challenge #1.
+1. [20 pts] You can solve challenge #1.
 
 1. [20 pts] You can solve challenge #2.
 
 1. [20 pts] You can solve challenge #3.
 
-1. [50 pts] You can solve challenge #4.
+1. [40 pts] You can solve challenge #4.
 
 
 # Lab Submission
