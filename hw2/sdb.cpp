@@ -574,6 +574,7 @@ void handle_load_cmd(const std::vector<std::string>& args) {
         uint64_t elf_entry = get_elf_entry_offset_from_readelf(prog_path);
         bool     is_dyn   = check_elf_is_dynamic_from_readelf(prog_path);
 
+        program_actual_entry_point = regs_cache.rip; //default to current RIP
         if (is_dyn) {
             if (program_base_address != 0 && elf_entry != 0) {
                 uint64_t target_e = program_base_address + elf_entry;
@@ -592,7 +593,6 @@ void handle_load_cmd(const std::vector<std::string>& args) {
                                 regs_cache.rip = target_e;
                                 set_current_registers();
                             }
-                            program_actual_entry_point = regs_cache.rip;
                         } else {
                             wait_for_process_event(status);
                             return;
@@ -603,17 +603,9 @@ void handle_load_cmd(const std::vector<std::string>& args) {
                             target_e,
                             static_cast<uint8_t>(ob)
                         );
-                    } else {
-                        program_actual_entry_point = regs_cache.rip;
                     }
-                } else {
-                    program_actual_entry_point = regs_cache.rip;
-                }
-            } else {
-                program_actual_entry_point = regs_cache.rip;
+                } 
             }
-        } else {
-            program_actual_entry_point = regs_cache.rip;
         }
 
         std::cout << "** program '" << prog_path
